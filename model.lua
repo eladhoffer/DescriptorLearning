@@ -1,7 +1,7 @@
 require 'nn'
 require 'eladtools'
-require 'L2EmbeddingCriterion'
-
+require 'BatchHingeEmbeddingCriterion'
+require 'BatchPairwiseDistance'
 local opt = opt or {type = 'cuda'}
 local InputMaps = 3
 local InputWidth = 32
@@ -12,8 +12,8 @@ local KernelSize = {7,3}
 local ConvStride = {1,1}
 local PoolSize = {2,2}
 local PoolStride= PoolSize
-local Outputs = 64
-local Margin = 3
+local Outputs = 128
+local Margin = Outputs
 local TValue = 0
 local TReplace = 0.000001 
 
@@ -24,7 +24,6 @@ end
 
 if opt.type == 'cuda' then
     require 'cunn'
-    nn.SpatialConvolutionMM = nn.SpatialConvolution
 end
 
 
@@ -34,27 +33,31 @@ local model = nn.Sequential()
 ---------------Layer - Convolution + Max Pooling------------------
 LayerNum = 1
 model:add(nn.SpatialConvolutionMM(InputMaps, FeatMaps[LayerNum], KernelSize[LayerNum], KernelSize[LayerNum], ConvStride[LayerNum], ConvStride[LayerNum]))
-model:add(nn.Threshold(TValue, TReplace))
---model:add(nn.Tanh())
+--model:add(nn.Threshold(TValue, TReplace))
+model:add(nn.Tanh())
 model:add(nn.SpatialMaxPooling(PoolSize[LayerNum], PoolSize[LayerNum], PoolStride[LayerNum], PoolStride[LayerNum]))
 
 
 ---------------Layer - Convolution + Max Pooling------------------
 LayerNum = 2
 model:add(nn.SpatialConvolutionMM(FeatMaps[LayerNum-1], FeatMaps[LayerNum], KernelSize[LayerNum], KernelSize[LayerNum], ConvStride[LayerNum], ConvStride[LayerNum]))
-model:add(nn.Threshold(TValue, TReplace))
---model:add(nn.Tanh())
+--model:add(nn.Threshold(TValue, TReplace))
+model:add(nn.Tanh())
 model:add(nn.SpatialMaxPooling(PoolSize[LayerNum], PoolSize[LayerNum], PoolStride[LayerNum], PoolStride[LayerNum]))
 
 ---------------Layer - Fully connected classifier ------------------
 LayerNum = 3
-model:add(nn.Reshape(SizeMap[LayerNum]*SizeMap[LayerNum]*FeatMaps[LayerNum-1]))
-model:add(nn.Linear(SizeMap[LayerNum]*SizeMap[LayerNum]*FeatMaps[LayerNum-1], Outputs))
-model:add(nn.SoftMax())
-
+--model:add(nn.Reshape(SizeMap[LayerNum]*SizeMap[LayerNum]*FeatMaps[LayerNum-1]))
+model:add(nn.SpatialConvolutionMM(FeatMaps[LayerNum-1], Outputs, SizeMap[LayerNum], SizeMap[LayerNum]))
+--model:add(nn.Linear(SizeMap[LayerNum]*SizeMap[LayerNum]*FeatMaps[LayerNum-1], Outputs))
+model:add(nn.Tanh())
+model:add(nn.Reshape(Outputs))
+--model:add(nn.SoftMax())
+--model:add(nn.Threshold())
 --local loss = nn.L2EmbeddingCriterion(100)
 if opt.type == 'cuda' then
-    model = CPU2CUDA(model)
+    --model = CPU2CUDA(model)
+    model = model:cuda()
     --loss:cuda()
 end
 
@@ -70,9 +73,9 @@ parallel:add(model_copy)
 
 local EmbeddingModel = nn.Sequential()
 EmbeddingModel:add(parallel)
-EmbeddingModel:add(nn.PairwiseDistance(1))
+EmbeddingModel:add(nn.BatchPairwiseDistance(1))
 
-local loss = nn.HingeEmbeddingCriterion(Margin)
+local loss = nn.BatchHingeEmbeddingCriterion(Margin)
 if opt.type == 'cuda' then
     EmbeddingModel:cuda()
     loss = loss:cuda()
@@ -80,6 +83,7 @@ end
 
 return {
     model = EmbeddingModel,
+    SubModel = model,
     weight = w,
     grad = dE_dw,
     InputSize = {InputMaps, InputWidth, InputHeight},

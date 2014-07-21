@@ -7,6 +7,7 @@ require 'optim'   -- an optimization package, for online and batch methods
 -- Model + Loss:
 local t = require 'model'
 local model = t.model
+local SubModel = t.SubModel
 local w, dE_dw = t.weight, t.grad
 local loss = t.loss
 local InputSize = t.InputSize
@@ -55,31 +56,32 @@ local function train(trainData)
     local DistanceN = 0
 
     -- shuffle at each epoch
-    local shuffle1 = torch.randperm(trainData.Patches:size(1))
-    local shuffle2 = torch.randperm(trainData.Patches:size(1))
+    --local shuffle1 = torch.randperm(trainData.Patches:size(1))
+    --local shuffle2 = torch.randperm(trainData.Patches:size(1))
+    local shuffle = torch.randperm(trainData.MatchList:size(1))
 
     -- do one epoch
     print('==> doing epoch on training data:')
     print("==> online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']') 
 
 
-    for t = 1,trainData.Patches:size(1),opt.batchSize do
+    for t = 1,trainData.MatchList:size(1),opt.batchSize do
 
         -- disp progress
-        xlua.progress(t, trainData.Patches:size(1))
+        xlua.progress(t, trainData.MatchList:size(1))
         collectgarbage()
 
         -- batch fits?
-        if (t + opt.batchSize - 1) > trainData.Patches:size(1) then
+        if (t + opt.batchSize - 1) > trainData.MatchList:size(1) then
             break
         end
 
         -- create mini batch
         local idx = 1
         for i = t,t+opt.batchSize-1 do
-            x1[idx] = trainData.Patches[shuffle1[i]]
-            x2[idx] = trainData.Patches[shuffle2[i]]
-            if trainData.ID[shuffle1[i]] == trainData.ID[shuffle2[i]] then
+            x1[idx] = trainData.Patches[trainData.MatchList[shuffle[i]][1]]
+            x2[idx] = trainData.Patches[trainData.MatchList[shuffle[i]][2]]
+            if trainData.ID[trainData.MatchList[shuffle[i]][1]]== trainData.ID[trainData.MatchList[shuffle[i]][2]]then
                 similar[idx] = 1
             else
                 similar[idx] = -1
@@ -126,7 +128,7 @@ local function train(trainData)
 
     -- time taken
     time = sys.clock() - time
-    time = time / trainData.Patches:size(1)
+    time = time / trainData.MatchList:size(1)
     print("\n==> time to learn 1 sample = " .. (time*1000) .. 'ms')
 
     numS = math.max(numS, 1)
@@ -142,7 +144,7 @@ local function train(trainData)
     os.execute('mkdir -p ' .. sys.dirname(filename))
     print('==> saving model to '..filename)
     --torch.save(filename, w:float())
-    torch.save(filename, model)
+    torch.save(filename, SubModel)
 
     -- next epoch
     epoch = epoch + 1

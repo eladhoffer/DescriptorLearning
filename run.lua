@@ -6,7 +6,7 @@ require 'trepl'
 print '==> processing options'
 
 opt = lapp[[
-   -r,--learningRate       (default 0.1)         learning rate
+   -r,--learningRate       (default 0.01)         learning rate
    -d,--learningRateDecay  (default 1e-7)        learning rate decay (in # samples)
    -w,--weightDecay        (default 1e-4)        L2 penalty on the weights
    -m,--momentum           (default 0.5)         momentum
@@ -17,6 +17,7 @@ opt = lapp[[
    -i,--devid              (default 1)           device ID (if using CUDA)
    -s,--size               (default extra)       dataset: small or full or extra
    -o,--save               (default results)     save directory
+   -z,--optimization       (default sgd)         Optimization technique
 ]]
 
 -- nb of threads and fixed seed (for repeatable experiments)
@@ -38,7 +39,8 @@ print '==> load modules'
 
 t = require 'model'
 
-local data  = require 'data'
+--local data  = require 'data'
+local data = torch.load('Data')
 local train = require 'train'
 local test  = require 'test'
 local earlystopper = EarlyStop(5)
@@ -48,7 +50,7 @@ print '==> training!'
 repeat
    train(data.trainData)
    TestSuccessRate = test(data.testData)
-   earlystopper:Update(TestSuccessRate)
+   earlystopper:Update(TestSuccessRate*100)
 until earlystopper:Stop()
 
 

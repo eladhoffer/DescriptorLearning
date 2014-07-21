@@ -39,29 +39,26 @@ local function test(testData)
     local DistanceS = 0
     local DistanceN = 0
 
-    -- shuffle at each epoch
-    local shuffle1 = torch.randperm(testData.Patches:size(1))
-    local shuffle2 = torch.randperm(testData.Patches:size(1))
 
     local class_error = 0
 
-    for t = 1,testData.Patches:size(1),opt.batchSize do
+    for t = 1,testData.MatchList:size(1),opt.batchSize do
 
         -- disp progress
-        xlua.progress(t, testData.Patches:size(1))
+        xlua.progress(t, testData.MatchList:size(1))
         collectgarbage()
 
         -- batch fits?
-        if (t + opt.batchSize - 1) > testData.Patches:size(1) then
+        if (t + opt.batchSize - 1) > testData.MatchList:size(1) then
             break
         end
 
         -- create mini batch
         local idx = 1
         for i = t,t+opt.batchSize-1 do
-            x1[idx] = testData.Patches[shuffle1[i]]
-            x2[idx] = testData.Patches[shuffle2[i]]
-            if testData.ID[shuffle1[i]] == testData.ID[shuffle2[i]] then
+            x1[idx] = testData.Patches[testData.MatchList[i][1]]
+            x2[idx] = testData.Patches[testData.MatchList[i][2]]
+            if testData.ID[testData.MatchList[i][1]] == testData.ID[testData.MatchList[i][2]] then
                 similar[idx] = 1
             else
                 similar[idx] = -1
@@ -95,16 +92,18 @@ local function test(testData)
 
     -- time taken
     time = sys.clock() - time
-    time = time / testData.Patches:size(1)
+    time = time / testData.MatchList:size(1)
     print("\n==> time to test 1 sample = " .. (time*1000) .. 'ms')
 
     DistanceS = DistanceS / numS
     DistanceN = DistanceN / numN
     class_error = class_error / (numN+numS)
-
+    marginThreshold = (DistanceN-DistanceS)/2 + DistanceS
     print('(TEST) Distance of similar patches = ' .. DistanceS)
     print('(TEST) Distance of dissimilar patches = ' .. DistanceN)
-    print('(TEST) Class Error = ' .. class_error)
+    print('(TEST) Modified Decision Threshold = ' .. marginThreshold)
+    print('(TEST) Class Error = ' .. class_error*100 ..'%')
+
     return 1-class_error
 end
 
